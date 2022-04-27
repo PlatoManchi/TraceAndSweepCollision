@@ -9,6 +9,8 @@ If you want to know how I made this plugin and learn more about the technical de
 - Once editor opens go to Edit -> Plugins and under Project -> Gameplay you can see TraceAndSweepCollision. Enable the plugin and restart the editor
 ![image](https://drive.google.com/uc?export=view&id=1X6CJztNBE462l9sqr1y-gz_tJpxNSaif)
 - Inside your actor that you want to replace collider with the plugin, delete the collider and add Trace And Sweep Collision component. (If using C++, add the component using CreateDefaultSuboject in constructor)
+- **Drag and drop the Trace And Sweep Collision Manager actor into your level. Every level should have one of this actor in them. Otherwise the collisions will not work in that level**
+
 
 ## Adding points to track using Line Tracing
 - If you want to use line trace then add child scene object component to Trace And Sweep Collision and set the scene object component location to desired location. You can add as many scene object components as you like. (Don't forget to disable the tick of these scene objects as its not needed and keeping it enabled is just waste of performance.)

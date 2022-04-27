@@ -1232,8 +1232,10 @@ bool UTraceAndSweepCollisionComponent::CanEditChange(const FProperty* property) 
 	// Style type
 	if (property->GetFName() == GET_MEMBER_NAME_CHECKED(UTraceAndSweepCollisionComponent, m_collision_line_data))
 	{
-		USkeletalMesh* parent_mesh = Cast<USkeletalMesh>(GetAttachParent());
-		return can_edit && m_style_type == ECollisionCompStyleType::LINE && parent_mesh;
+		// Get attached parent isn't returning parent, so comment it out
+		// TODO: Fix this so that line data can only be edited when its chid of skeletal mesh
+		//USkeletalMesh* parent_mesh = Cast<USkeletalMesh>(GetAttachParent());
+		return can_edit && m_style_type == ECollisionCompStyleType::LINE /* && parent_mesh*/;
 	}
 
 	if (property->GetFName() == GET_MEMBER_NAME_CHECKED(UTraceAndSweepCollisionComponent, m_collision_shape_data))

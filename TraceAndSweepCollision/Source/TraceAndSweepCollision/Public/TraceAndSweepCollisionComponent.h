@@ -40,7 +40,11 @@ protected:
 	virtual void TickComponent(float delta_time, ELevelTick tick_type, FActorComponentTickFunction* this_tick_function) override;
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
 	// End UPrimitiveComponent overrides
-	
+
+	//~ Begin USceneComponent Interface
+	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
+	// virtual void CalcBoundingCylinder(float& CylinderRadius, float& CylinderHalfHeight) const override;
+	//~ End USceneComponent Interface
 private:
 	// Wrapper for FHitResult since FHitResult doesn't have == operator
 	struct FHitResultWrapper

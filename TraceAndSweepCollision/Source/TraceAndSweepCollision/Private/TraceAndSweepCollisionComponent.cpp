@@ -1423,3 +1423,92 @@ FPrimitiveSceneProxy* UTraceAndSweepCollisionComponent::CreateSceneProxy()
 
 	return new FTraceAndSweepCollisionSceneProxy(this);
 }
+
+FBoxSphereBounds UTraceAndSweepCollisionComponent::CalcBounds(const FTransform& LocalToWorld) const
+{
+    // Start with a small default bounds
+    FBox BoundingBox(ForceInit);
+	// Get our current location
+	FVector Center = GetComponentLocation();
+    
+    // If using line traces, calculate bounds based on the component's transform
+    if (m_style_type == ECollisionCompStyleType::LINE)
+    {
+        // Start with a small box at our location
+        BoundingBox += Center;
+        
+        // For each line data entry, try to expand bounds
+        for (const FCollisionLineData& LineData : m_collision_line_data)
+        {
+            // Try to expand the bounds if we're using sockets
+            if (LineData.m_socket_name != NAME_None)
+            {
+                // Find the parent component that might have this socket
+                USceneComponent* Parent = GetAttachParent();
+                USkeletalMeshComponent* SkeletalParent = Cast<USkeletalMeshComponent>(Parent);
+                
+                if (SkeletalParent && SkeletalParent->DoesSocketExist(LineData.m_socket_name))
+                {
+                    // Get socket transform in world space
+                    FTransform SocketTransform = SkeletalParent->GetSocketTransform(LineData.m_socket_name);
+                    // Add the socket location to our bounding box
+                    BoundingBox += SocketTransform.GetLocation();
+                }
+            }
+        }
+        
+        // Expand the box by a reasonable distance for trace lines
+        BoundingBox = BoundingBox.ExpandBy(100.0f);
+    }
+    // If using sweep shapes, calculate bounds based on the shapes
+    else if (m_style_type == ECollisionCompStyleType::SWEEP)
+    {
+        // Get our current location as the center
+        BoundingBox += Center;
+        
+        // Maximum extents for all shapes
+        float MaxExtent = 0.0f;
+        
+        // For each shape, find the maximum extent
+        for (const FCollisionShapeData& ShapeData : m_collision_shape_data)
+        {
+            float ShapeExtent = 0.0f;
+            
+            // Get the appropriate extent based on shape type
+            switch (ShapeData.m_shape_type)
+            {
+                case ECollisionCompShapeType::BOX:
+                    // Use the maximum component of the box half extent
+                    ShapeExtent = FMath::Max3(ShapeData.m_box_half_extent.X, 
+                                             ShapeData.m_box_half_extent.Y, 
+                                             ShapeData.m_box_half_extent.Z);
+                    break;
+                    
+                case ECollisionCompShapeType::SPHERE:
+                    ShapeExtent = ShapeData.m_sphere_radius;
+                    break;
+                    
+                case ECollisionCompShapeType::CAPSULE:
+                    // For capsule, use radius + half-height
+                    ShapeExtent = FMath::Max(ShapeData.m_capsule_radius, 
+                                           ShapeData.m_capsule_half_height);
+                    break;
+            }
+            
+            // Update max extent if this shape is larger
+            MaxExtent = FMath::Max(MaxExtent, ShapeExtent);
+        }
+        
+        // Expand the box by the maximum extent in all directions
+        BoundingBox = BoundingBox.ExpandBy(MaxExtent);
+    }
+    
+    // If we have no valid bounds yet, use a small default
+    if (!BoundingBox.IsValid)
+    {
+        BoundingBox = FBox(FVector(-50, -50, -50), FVector(50, 50, 50));
+    }
+    
+    // Create and return the box sphere bounds
+    return FBoxSphereBounds(BoundingBox);
+}

@@ -1398,19 +1398,15 @@ FPrimitiveSceneProxy* UTraceAndSweepCollisionComponent::CreateSceneProxy()
 
 		virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override
 		{
-			// TODO: Have to figure out which values to set so that the shapes are always visible instead of being visible only when selected.
-
-			const bool bProxyVisible = true;
+			bool bDrawOnlyIfSelected = false;
+			const bool bProxyVisible = !bDrawOnlyIfSelected || IsSelected();
 
 			// Should we draw this because collision drawing is enabled, and we have collision
-			const bool bShowForCollision = View->Family->EngineShowFlags.Collision && IsCollisionEnabled();
+			const bool bShowForCollision = View->Family->EngineShowFlags.Collision;
 
 			FPrimitiveViewRelevance Result;
-			Result.bDrawRelevance = true;//(IsShown(View) && bProxyVisible) || bShowForCollision;
-			Result.bStaticRelevance = true;
+			Result.bDrawRelevance = (IsShown(View) && bProxyVisible) || bShowForCollision;
 			Result.bDynamicRelevance = true;
-			Result.bVelocityRelevance = true;
-
 			Result.bShadowRelevance = IsShadowCast(View);
 			Result.bEditorPrimitiveRelevance = UseEditorCompositing(View);
 			return Result;
@@ -1422,4 +1418,166 @@ FPrimitiveSceneProxy* UTraceAndSweepCollisionComponent::CreateSceneProxy()
 	};
 
 	return new FTraceAndSweepCollisionSceneProxy(this);
+}
+
+
+FBoxSphereBounds UTraceAndSweepCollisionComponent::CalcBounds(const FTransform& LocalToWorld) const
+{
+	FVector min_bound_point = FVector::ZeroVector;
+	FVector max_bound_point = FVector::ZeroVector;
+
+	if (m_style_type == ECollisionCompStyleType::LINE)
+	{
+		bool is_first = true;
+
+		for (const FCollisionLineData& data : m_collision_line_data)
+		{
+			FVector point_world_location = FVector::ZeroVector;
+			if (data.m_scene_component_to_follow)
+			{
+				point_world_location = data.m_scene_component_to_follow->GetComponentLocation();
+			}
+			else if (data.m_socket_name != NAME_None)
+			{
+				const USkeletalMeshComponent* parent_skeletal_mesh = Cast<USkeletalMeshComponent>(GetAttachParent());
+				if (parent_skeletal_mesh)
+				{
+					point_world_location = parent_skeletal_mesh->GetSocketLocation(data.m_socket_name);
+				}
+			}
+
+			if (is_first)
+			{
+				min_bound_point = point_world_location;
+				max_bound_point = point_world_location;
+				is_first = false;
+			}
+
+			// Get min and max bounds
+			min_bound_point.X = FMath::Min(min_bound_point.X, point_world_location.X);
+			min_bound_point.Y = FMath::Min(min_bound_point.Y, point_world_location.Y);
+			min_bound_point.Z = FMath::Min(min_bound_point.Z, point_world_location.Z);
+
+			max_bound_point.X = FMath::Max(max_bound_point.X, point_world_location.X);
+			max_bound_point.Y = FMath::Max(max_bound_point.Y, point_world_location.Y);
+			max_bound_point.Z = FMath::Max(max_bound_point.Z, point_world_location.Z);
+		}
+
+
+		// buffer to show arrows for points so that arrows won't disappear when point is at corner or slightly out of view.
+		const FVector debug_arrow_buffer = FVector(m_debug_arrow_length, m_debug_arrow_length, m_debug_arrow_length);
+		min_bound_point -= debug_arrow_buffer;
+		max_bound_point += debug_arrow_buffer;
+	}
+	else if (m_style_type == ECollisionCompStyleType::SWEEP)
+	{
+		bool is_first = true;
+		FTransform comp_transform = GetComponentTransform();
+
+		for (const FCollisionShapeData& shape : m_collision_shape_data)
+		{
+			FVector min_shape_bound;
+			FVector max_shape_bound;
+			if (shape.m_shape_type == ECollisionCompShapeType::BOX || shape.m_shape_type == ECollisionCompShapeType::CAPSULE)
+			{
+				// Apply offset and component transform to convert each vertices of the box from local to world space
+				// and then get the smallest and largest coordinate of vertices to find the min and max bounds.
+				FTransform total_world_transform = shape.m_offset * comp_transform;
+
+				FBox box;
+				if (shape.m_shape_type == ECollisionCompShapeType::BOX)
+				{
+					box = FBox(-shape.m_box_half_extent, shape.m_box_half_extent);
+				}
+				else if (shape.m_shape_type == ECollisionCompShapeType::CAPSULE)
+				{
+					// For capsule just construct a box around capsule and calculate bounds of the box
+					// Capsule has constraints:
+					//		Scale on X and Y axis should be same.
+					//		Radius cannot exceed half height after scaling both radius and half height
+					// Scale is applied here so that constraints can be imposed.
+					FVector world_scale = total_world_transform.GetScale3D();
+					double capsule_radius = shape.m_capsule_radius * FMath::Max(FMath::Abs(world_scale.X), FMath::Abs(world_scale.Y));
+					double half_height = shape.m_capsule_half_height * FMath::Abs(world_scale.Z);
+					capsule_radius = FMath::Clamp(capsule_radius, 0.f, half_height);	//cap radius based on total height
+					half_height = FMath::Max(capsule_radius, half_height);
+
+					FVector capsule_extent = FVector(capsule_radius, capsule_radius, half_height);
+					box = FBox(-capsule_extent, capsule_extent);
+
+					// Since scale is already being considered for calculating radius and height, remove it
+					total_world_transform.SetScale3D(FVector(1.0f, 1.0f, 1.0f));
+				}
+
+				FVector vertices[8];
+				box.GetVertices(vertices);
+
+				FTransform tmp = FTransform::Identity;
+				tmp.SetLocation(vertices[0]);
+
+				tmp = tmp * total_world_transform;
+
+				FVector vertice_world_loc = tmp.GetLocation();
+				min_shape_bound = vertice_world_loc;
+				max_shape_bound = vertice_world_loc;
+
+				for (int i = 0; i < 8; ++i)
+				{
+					// Create a transform with just location set at the vertices
+					tmp = FTransform::Identity;
+					tmp.SetLocation(vertices[i]);
+
+					// Apply world transform to the vertices to get the world location of vertices
+					tmp = tmp * total_world_transform;
+
+					vertice_world_loc = tmp.GetLocation();
+
+					// Get min and max bounds
+					min_shape_bound.X = FMath::Min(min_shape_bound.X, vertice_world_loc.X);
+					min_shape_bound.Y = FMath::Min(min_shape_bound.Y, vertice_world_loc.Y);
+					min_shape_bound.Z = FMath::Min(min_shape_bound.Z, vertice_world_loc.Z);
+
+					max_shape_bound.X = FMath::Max(max_shape_bound.X, vertice_world_loc.X);
+					max_shape_bound.Y = FMath::Max(max_shape_bound.Y, vertice_world_loc.Y);
+					max_shape_bound.Z = FMath::Max(max_shape_bound.Z, vertice_world_loc.Z);
+				}
+			}
+			else if (shape.m_shape_type == ECollisionCompShapeType::SPHERE)
+			{
+				// Apply offset and component transform to convert sphere from local to world space
+				// NOTE: Rotation doesn't matter for sphere
+				FTransform sphere_world_transform = shape.m_offset * comp_transform;
+				FVector origin = sphere_world_transform.GetLocation();
+
+				float world_scale = FMath::Max(0, sphere_world_transform.GetScale3D().GetMax());
+				float effective_radius = shape.m_sphere_radius * world_scale;
+
+				min_shape_bound = origin - FVector(effective_radius, effective_radius, effective_radius);
+				max_shape_bound = origin + FVector(effective_radius, effective_radius, effective_radius);
+			}
+
+			if (is_first)
+			{
+				min_bound_point = min_shape_bound;
+				max_bound_point = max_shape_bound;
+				is_first = false;
+			}
+
+			min_bound_point.X = FMath::Min(min_bound_point.X, min_shape_bound.X);
+			min_bound_point.Y = FMath::Min(min_bound_point.Y, min_shape_bound.Y);
+			min_bound_point.Z = FMath::Min(min_bound_point.Z, min_shape_bound.Z);
+
+			max_bound_point.X = FMath::Max(max_bound_point.X, max_shape_bound.X);
+			max_bound_point.Y = FMath::Max(max_bound_point.Y, max_shape_bound.Y);
+			max_bound_point.Z = FMath::Max(max_bound_point.Z, max_shape_bound.Z);
+		}
+
+		// buffer to consider line thickness
+		const FVector debug_line_thickness_buffer = FVector(m_debug_thickness, m_debug_thickness, m_debug_thickness);
+		min_bound_point -= debug_line_thickness_buffer;
+		max_bound_point += debug_line_thickness_buffer;
+	}
+
+	// bounds are calculated in world space so don't need to convert them here.
+	return FBoxSphereBounds(FBox(min_bound_point, max_bound_point));
 }

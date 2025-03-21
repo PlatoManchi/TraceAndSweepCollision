@@ -41,6 +41,9 @@ protected:
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
 	// End UPrimitiveComponent overrides
 	
+	//~ Begin USceneComponent Interface
+	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
+	//~ End USceneComponent Interface
 private:
 	// Wrapper for FHitResult since FHitResult doesn't have == operator
 	struct FHitResultWrapper

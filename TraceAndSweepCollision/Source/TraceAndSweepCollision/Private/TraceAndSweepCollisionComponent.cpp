@@ -95,11 +95,11 @@ void UTraceAndSweepCollisionComponent::TickComponent(float delta_time, ELevelTic
 bool UTraceAndSweepCollisionComponent::DoCollisionTest()
 {
 	SCOPE_CYCLE_COUNTER(STAT_DoCollisionTest);
-	
+
 	// Clear out cached results from previous collision test
 	m_forward_hit_results.Empty();
 	m_reverse_hit_results.Empty();
-	
+
 	if (m_execution_type == ECollisionCompExecutionType::SYNCHRONOUS && m_style_type == ECollisionCompStyleType::LINE && m_trace_type == ECollisionCompTraceType::SINGLE)
 	{
 		return DoSynchronousLineSingleCollisionTest();
@@ -132,7 +132,7 @@ bool UTraceAndSweepCollisionComponent::DoCollisionTest()
 bool UTraceAndSweepCollisionComponent::DoSynchronousLineSingleCollisionTest()
 {
 	SCOPE_CYCLE_COUNTER(STAT_DoSynchronousLineSingleCollisionTest);
-	
+
 	UWorld* world = GetWorld();
 	if (!world) return false;
 
@@ -228,7 +228,7 @@ bool UTraceAndSweepCollisionComponent::DoSynchronousLineSingleCollisionTest()
 bool UTraceAndSweepCollisionComponent::DoSynchronousSweepSingleCollisionTest()
 {
 	SCOPE_CYCLE_COUNTER(STAT_DoSynchronousSweepSingleCollisionTest);
-	
+
 	UWorld* world = GetWorld();
 	if (!world) return false;
 
@@ -333,7 +333,7 @@ bool UTraceAndSweepCollisionComponent::DoSynchronousSweepSingleCollisionTest()
 		}
 #endif
 	}
-	
+
 	// All hit results are ready to be processed
 	ProcessForwardHitResults();
 
@@ -397,7 +397,7 @@ bool UTraceAndSweepCollisionComponent::DoSynchronousLineMultiCollisionTest()
 					m_forward_hit_results.AddUnique(forward_hit);
 				}
 			}
-			
+
 			if (m_should_generate_end_overlap)
 			{
 				// check for reverse hits, these results will be used for end overlap check
@@ -483,7 +483,7 @@ bool UTraceAndSweepCollisionComponent::DoSynchronousSweepMultiCollisionTest()
 				m_forward_hit_results.AddUnique(forward_hit);
 			}
 		}
-		
+
 		// Reverse Sweep
 		if (m_should_generate_end_overlap)
 		{
@@ -620,14 +620,14 @@ bool UTraceAndSweepCollisionComponent::DoAsynchronousLineCollisionTest()
 			line_data.m_prev_location = end;
 		}
 	}
-	
+
 	return true;
 }
 
 bool UTraceAndSweepCollisionComponent::DoAsynchronousSweepCollisionTest()
 {
 	SCOPE_CYCLE_COUNTER(STAT_DoAsynchronousSweepCollisionTest);
-	
+
 	UWorld* world = GetWorld();
 	if (!world) return false;
 
@@ -812,7 +812,7 @@ bool UTraceAndSweepCollisionComponent::DoSweepMulti(TArray<FHitResult>& out_resu
 
 FTraceHandle UTraceAndSweepCollisionComponent::DoAsyncLine(UWorld* world, const EAsyncTraceType trace_type, const FVector& start, const FVector& end, const FCollisionQueryParams& params, bool is_reverse /* = false*/)
 {
-	const bool is_special_case = is_reverse && trace_type == EAsyncTraceType::Multi &&(m_channel_type == ECollisionCompChannelType::TRACE_CHANNEL || m_channel_type == ECollisionCompChannelType::COLLISION_PRESET);
+	const bool is_special_case = is_reverse && trace_type == EAsyncTraceType::Multi && (m_channel_type == ECollisionCompChannelType::TRACE_CHANNEL || m_channel_type == ECollisionCompChannelType::COLLISION_PRESET);
 
 	if (!is_special_case)
 	{
@@ -1118,7 +1118,7 @@ void UTraceAndSweepCollisionComponent::ProcessReverseHitResults()
 				m_overlapped_results[index].m_count--;
 				if (m_overlapped_results[index].m_count == 0)
 				{
-					m_overlapped_results.RemoveAtSwap(index, 1, false);
+					m_overlapped_results.RemoveAtSwap(index, 1, EAllowShrinking::No);
 
 					// broadcast end overlapevent
 					if (OnComponentEndOverlap.IsBound())
@@ -1251,6 +1251,49 @@ bool UTraceAndSweepCollisionComponent::CanEditChange(const FProperty* property) 
 
 	return can_edit;
 }
+
+void UTraceAndSweepCollisionComponent::PostEditChangeChainProperty(FPropertyChangedChainEvent& PropertyChangedEvent)
+{
+	if (PropertyChangedEvent.Property != nullptr)
+	{
+		const FName property_name = PropertyChangedEvent.Property ? PropertyChangedEvent.Property->GetFName() : NAME_None;
+		const FName capsule_half_height_name = GET_MEMBER_NAME_CHECKED(FCollisionShapeData, m_capsule_half_height);
+		const FName capsule_radius_name = GET_MEMBER_NAME_CHECKED(FCollisionShapeData, m_capsule_radius);
+		const FName offset_name = GET_MEMBER_NAME_CHECKED(FCollisionShapeData, m_offset);
+		const FName collision_shape_data_name = GET_MEMBER_NAME_CHECKED(UTraceAndSweepCollisionComponent, m_collision_shape_data);
+
+		const int32 AddedAtIndex = PropertyChangedEvent.GetArrayIndex(collision_shape_data_name.ToString());
+		check(AddedAtIndex != INDEX_NONE);
+
+		if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ValueSet)
+		{
+			if (m_collision_shape_data[AddedAtIndex].m_shape_type == ECollisionCompShapeType::CAPSULE)
+			{
+				if (property_name == capsule_half_height_name)
+				{
+					m_collision_shape_data[AddedAtIndex].m_capsule_half_height = FMath::Max3(0.f, m_collision_shape_data[AddedAtIndex].m_capsule_half_height, m_collision_shape_data[AddedAtIndex].m_capsule_radius);
+				}
+				else if (property_name == capsule_radius_name)
+				{
+					m_collision_shape_data[AddedAtIndex].m_capsule_radius = FMath::Clamp(m_collision_shape_data[AddedAtIndex].m_capsule_radius, 0.f, m_collision_shape_data[AddedAtIndex].m_capsule_half_height);
+				}
+			}
+		}
+	}
+	
+	// We only want to modify the property that was changed at this point
+	// things like propagation from CDO to instances don't work correctly if changing one property causes a different property to change
+	/*if (PropertyName == GET_MEMBER_NAME_CHECKED(UCapsuleComponent, CapsuleHalfHeight))
+	{
+		CapsuleHalfHeight = FMath::Max3(0.f, CapsuleHalfHeight, CapsuleRadius);
+	}
+	else if (PropertyName == GET_MEMBER_NAME_CHECKED(UCapsuleComponent, CapsuleRadius))
+	{
+		CapsuleRadius = FMath::Clamp(CapsuleRadius, 0.f, CapsuleHalfHeight);
+	}*/
+
+	Super::PostEditChangeChainProperty(PropertyChangedEvent);
+}
 #endif
 
 
@@ -1277,10 +1320,10 @@ FPrimitiveSceneProxy* UTraceAndSweepCollisionComponent::CreateSceneProxy()
 
 		virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const override
 		{
-			SCOPE_CYCLE_COUNTER( STAT_TraceAndSweepCollisionSceneProxy_GetDynamicMeshElements );
-			
+			SCOPE_CYCLE_COUNTER(STAT_TraceAndSweepCollisionSceneProxy_GetDynamicMeshElements);
+
 			const FMatrix& local_to_world = GetLocalToWorld();
-			
+
 			for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
 			{
 				if (VisibilityMap & (1 << ViewIndex))
@@ -1476,8 +1519,8 @@ FBoxSphereBounds UTraceAndSweepCollisionComponent::CalcBounds(const FTransform& 
 
 		for (const FCollisionShapeData& shape : m_collision_shape_data)
 		{
-			FVector min_shape_bound;
-			FVector max_shape_bound;
+			FVector min_shape_bound = FVector::ZeroVector;
+			FVector max_shape_bound = FVector::ZeroVector;
 			if (shape.m_shape_type == ECollisionCompShapeType::BOX || shape.m_shape_type == ECollisionCompShapeType::CAPSULE)
 			{
 				// Apply offset and component transform to convert each vertices of the box from local to world space

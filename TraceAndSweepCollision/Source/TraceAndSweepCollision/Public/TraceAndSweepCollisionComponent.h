@@ -8,7 +8,7 @@
 //For Unreal Profiler
 DECLARE_STATS_GROUP(TEXT("TraceAndSweepCollisionComponent"), STATGROUP_TraceAndSweepCollisionComponent, STATCAT_Advanced);
 
-UCLASS(ClassGroup=(TraceAndSweepCollision), meta = (BlueprintSpawnableComponent))
+UCLASS(ClassGroup = (TraceAndSweepCollision), meta = (BlueprintSpawnableComponent))
 class TRACEANDSWEEPCOLLISION_API UTraceAndSweepCollisionComponent : public UPrimitiveComponent
 {
 	GENERATED_BODY()
@@ -16,7 +16,7 @@ class TRACEANDSWEEPCOLLISION_API UTraceAndSweepCollisionComponent : public UPrim
 	// making component a friend of manager so that manager can manage the class without restrictions
 	friend class ATraceAndSweepCollisionManager;
 
-public:	
+public:
 	UTraceAndSweepCollisionComponent();
 
 	UFUNCTION(BlueprintCallable, Category = "TraceAndSweepCollision")
@@ -40,7 +40,7 @@ protected:
 	virtual void TickComponent(float delta_time, ELevelTick tick_type, FActorComponentTickFunction* this_tick_function) override;
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
 	// End UPrimitiveComponent overrides
-	
+
 	//~ Begin USceneComponent Interface
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
 	//~ End USceneComponent Interface
@@ -56,7 +56,7 @@ private:
 	};
 
 	bool DoCollisionTest();
-	
+
 	bool DoSynchronousLineSingleCollisionTest();
 	bool DoSynchronousSweepSingleCollisionTest();
 	bool DoSynchronousLineMultiCollisionTest();
@@ -72,7 +72,7 @@ private:
 	bool DoLineMulti(TArray<FHitResult>& out_results, UWorld* world, const FVector& start, const FVector& end, const FCollisionQueryParams& params, bool is_reverse = false) const;
 	bool DoSweepSingle(FHitResult& out_result, UWorld* world, const FVector& start, const FVector& end, const FQuat rotation, const FCollisionShapeData& shape_data, const FCollisionQueryParams& params) const;
 	bool DoSweepMulti(TArray<FHitResult>& out_results, UWorld* world, const FVector& start, const FVector& end, const FQuat rotation, const FCollisionShapeData& shape_data, const FCollisionQueryParams& params, bool is_reverse = false) const;
-	
+
 	FTraceHandle DoAsyncLine(UWorld* world, const EAsyncTraceType trace_type, const FVector& start, const FVector& end, const FCollisionQueryParams& params, bool is_reverse = false);
 	FTraceHandle DoAsyncSweep(UWorld* world, const EAsyncTraceType trace_type, const FVector& start, const FVector& end, const FQuat rotation, const FCollisionShapeData& shape_data, const FCollisionQueryParams& params, bool is_reverse = false);
 
@@ -126,7 +126,7 @@ private:
 	// Use Object type or Trace channel or Collision preset
 	UPROPERTY(EditDefaultsOnly, BlueprintReadonly, Category = "TraceAndSweepCollision", meta = (DisplayName = "Channel Type", AllowPrivateAccess))
 	ECollisionCompChannelType m_channel_type = ECollisionCompChannelType::COLLISION_PRESET;
-	
+
 	// Trace channel to use
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "TraceAndSweepCollision", meta = (DisplayName = "Trace Channel", EditCondition = "m_channel_type == ECollisionCompChannelType::TRACE_CHANNEL", EditConditionHides, AllowPrivateAccess))
 	TEnumAsByte<ECollisionChannel> m_trace_channel;
@@ -154,8 +154,8 @@ private:
 	// If sweep, then list of shapes to use for collision test
 	UPROPERTY(EditDefaultsOnly, BlueprintReadonly, Category = "TraceAndSweepCollision", meta = (DisplayName = "Shapes List", EditCondition = "m_style_type == ECollisionCompStyleType::SWEEP", EditConditionHides, AllowPrivateAccess, TitleProperty = "m_shape_type"))
 	TArray<FCollisionShapeData> m_collision_shape_data;
-	
-	
+
+
 
 	/** Whether we should trace against complex collision */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "TraceAndSweepCollision", AdvancedDisplay, meta = (DisplayName = "Trace Complex", AllowPrivateAccess))
@@ -245,5 +245,6 @@ protected:
 	// Before 4.23 edit condition with C++ statements isn't supported, so use this function for editors before 4.23
 	// Uproperty is depecated and now use FProperty since 4.26, so this might not compile in older versions
 	virtual bool CanEditChange(const FProperty* property) const override;
+	virtual void PostEditChangeChainProperty(FPropertyChangedChainEvent& PropertyChangedEvent) override;
 #endif
 };

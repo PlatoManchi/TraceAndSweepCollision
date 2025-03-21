@@ -27,14 +27,20 @@ For a sword that needs more points
 
 
 ## Adding Shapes for Sweep Tracing
-- Change the Trace stylt sweep and it will give you an array to add any nymber of shapes you want.
+- Change the Trace style type to sweep and it will give you an array to add any nymber of shapes you want.
 ![image](https://drive.google.com/uc?export=view&id=1Ynbfu3KlpMdC5qmvk566ARyvTnKciN_J)
 - This allows you to add any of three basic shape types, box, capsule and sphere. 
 - In this sword example I wanted to add a rectangle that covers the entire sword and then a sphere that covers the hilt of the sword.
 ![image](https://drive.google.com/uc?export=view&id=1HM9bGhLWNPpA7nWPlWtgVukGGoHho9Yu)
 
-**NOTE:** Use the offset value for each shape to move and rotate the individual shapes. Right now selecting any shape will select entire component. I'm working on being able to select individual shapes and be able to move and rotate them inside the viewport. For now you have to just type the location and rotation in the offset for the shape.
+> [!NOTE]
+> Use the offset value for each shape to move and rotate the individual shapes. Right now selecting any shape will select entire component. I'm working on being able to select individual shapes and be able to move and rotate them inside the viewport. For now you have to just type the location and rotation in the offset for the shape.
 
+> [!IMPORTANT]
+> Due to how trace works in unreal there are some constraints on how scale is applied to the shapes.
+> - For sphere shape: The maximum scale value is selected and applied on all axis. Eg. if scale is (3.0, 4.0, 2.0) then effective scale is 4.0 on all axis for sphere.
+> - For capsule shape: Maximum scale value on X and Y axis is applied to X and Y axis. Z axis scale is independent. **World scale is also constrainted by half height. Radius cannot exceed half height.**
+>  - Eg: If capsule radius is 10 and half height is 20. And world scale is (3.0, 3.0, 1.0) radius should become 30, but since half height is 20, radius will be restricted to 20. 
 
 ## Setting up collisions
 - Every way unreal allows trace is available as drop down options in the component. These are same options that are available when you want to do a trace in blueprint or C++.
